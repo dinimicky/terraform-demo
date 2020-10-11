@@ -25,79 +25,6 @@ func PrettyPrint(a ...interface{}) {
 	}
 }
 
-func ExampleHclEncodeAndDecode() {
-	type DataDisks struct {
-		DataDiskSize int32   `hcl:"data_disk_size"`
-		DataDiskType string  `hcl:"data_disk_type"`
-		DataDiskId   *string `hcl:"data_disk_id"`
-	}
-
-	type ResourceTcInstance struct {
-		Type      string      `hcl:"type,label"`
-		Name      string      `hcl:"name,label"`
-		ImageId   string      `hcl:"image_id"`
-		DataDisks []DataDisks `hcl:"data_disks,block"`
-	}
-
-	type App struct {
-		//Name             string            `hcl:"name"`
-		//Desc             string            `hcl:"description"`
-		Resources []ResourceTcInstance `hcl:"resource,block"`
-	}
-
-	disk_demo_id := "disk-1243323"
-	app := App{
-		//Name: "awesome-app",
-		//Desc: "Such an awesome application",
-		//Constraints: &Constraints{
-		//	OS:   "linux",
-		//	Arch: "amd64",
-		//},
-		Resources: []ResourceTcInstance{
-			{
-				Name:    "web",
-				Type:    "http",
-				ImageId: "img-123",
-				DataDisks: []DataDisks{
-					{DataDiskSize: 10, DataDiskType: "CLOUD_PREMIUM"},
-					{DataDiskSize: 20, DataDiskType: "CLOUD_PREMIUM", DataDiskId: &disk_demo_id},
-				},
-			},
-			{
-				Name:    "work",
-				Type:    "grpc",
-				ImageId: "img-222",
-			},
-		},
-	}
-
-	f := hclwrite.NewEmptyFile()
-	gohcl.EncodeIntoBody(&app, f.Body())
-	fmt.Printf("%s", f.Bytes())
-	var config App
-	err := hclsimple.Decode("example.hcl", f.Bytes(), nil, &config)
-	if err != nil {
-		log.Fatalf("Failed to load configuration: %s", err)
-	}
-
-	fmt.Printf("Configuration is %v\n", config)
-	// Output:
-	// name        = "awesome-app"
-	// description = "Such an awesome application"
-	//
-	// constraints {
-	//   os   = "linux"
-	//   arch = "amd64"
-	// }
-	//
-	// service "web" {
-	//   executable = ["./web", "--listen=:8080"]
-	// }
-	// service "worker" {
-	//   executable = ["./worker"]
-	// }
-}
-
 func TerraformExec() {
 	//tmpDir, err := ioutil.TempDir("", "tfinstall")
 	//if err != nil {
@@ -171,8 +98,81 @@ func TerraformExec() {
 	PrettyPrint(state.FormatVersion, state.Values) // "0.1"
 }
 
+func ExampleHclEncodeAndDecode() {
+	type DataDisks struct {
+		DataDiskSize int32   `hcl:"data_disk_size"`
+		DataDiskType string  `hcl:"data_disk_type"`
+		DataDiskId   *string `hcl:"data_disk_id"`
+	}
+
+	type ResourceTcInstance struct {
+		Type      string      `hcl:",label"`
+		Name      string      `hcl:",label"`
+		ImageId   string      `hcl:"image_id"`
+		DataDisks []DataDisks `hcl:"data_disks,block"`
+	}
+
+	type App struct {
+		//Name             string            `hcl:"name"`
+		//Desc             string            `hcl:"description"`
+		Resources []ResourceTcInstance `hcl:"resource,block"`
+	}
+
+	disk_demo_id := "disk-1243323"
+	app := App{
+		//Name: "awesome-app",
+		//Desc: "Such an awesome application",
+		//Constraints: &Constraints{
+		//	OS:   "linux",
+		//	Arch: "amd64",
+		//},
+		Resources: []ResourceTcInstance{
+			{
+				Name:    "web",
+				Type:    "http",
+				ImageId: "img-123",
+				DataDisks: []DataDisks{
+					{DataDiskSize: 10, DataDiskType: "CLOUD_PREMIUM"},
+					{DataDiskSize: 20, DataDiskType: "CLOUD_PREMIUM", DataDiskId: &disk_demo_id},
+				},
+			},
+			{
+				Name:    "work",
+				Type:    "grpc",
+				ImageId: "img-222",
+			},
+		},
+	}
+
+	f := hclwrite.NewEmptyFile()
+	gohcl.EncodeIntoBody(&app, f.Body())
+	fmt.Printf("%s", f.Bytes())
+	var config App
+	err := hclsimple.Decode("example.hcl", f.Bytes(), nil, &config)
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %s", err)
+	}
+
+	fmt.Printf("Configuration is %v\n", config)
+	// Output:
+	// name        = "awesome-app"
+	// description = "Such an awesome application"
+	//
+	// constraints {
+	//   os   = "linux"
+	//   arch = "amd64"
+	// }
+	//
+	// service "web" {
+	//   executable = ["./web", "--listen=:8080"]
+	// }
+	// service "worker" {
+	//   executable = ["./worker"]
+	// }
+}
+
 func main() {
 	//TerraformExec()
-	//ExampleHclEncodeAndDecode()
-	GoHclGen.ReadPackage()
+	ExampleHclEncodeAndDecode()
+	GoHclGen.TfReader()
 }

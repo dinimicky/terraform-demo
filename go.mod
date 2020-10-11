@@ -4,7 +4,8 @@ go 1.15
 
 require (
 	github.com/davecgh/go-spew v1.1.1
-	github.com/dinimicky/myenumstr v0.0.0-20201010134327-0674c9b87ff6
+	github.com/dinimicky/myenumstr v0.0.0-20201010134327-0674c9b87ff6 // indirect
+	github.com/google/martian v2.1.0+incompatible
 	github.com/hashicorp/go-hclog v0.9.2
 	github.com/hashicorp/hcl/v2 v2.6.0
 	github.com/hashicorp/terraform-exec v0.11.0
