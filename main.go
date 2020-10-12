@@ -173,6 +173,6 @@ func ExampleHclEncodeAndDecode() {
 
 func main() {
 	//TerraformExec()
-	ExampleHclEncodeAndDecode()
-	GoHclGen.TfReader()
+	//ExampleHclEncodeAndDecode()
+	GoHclGen.HclRW()
 }

@@ -38,25 +38,29 @@ var (
 	logger  = hclog.L()
 )
 
-type HclSchema interface {
-}
-type hclSchema struct {
-	TypeName  string
-	ValueType schema.ValueType
-	GoType    string
-	Optional  bool
-	Required  bool
-	Elem      interface{}
+type Hcl interface {
+	GoString() string
+	GoType() string
+	HclTag() string
 }
 
-type HclResource interface {
-	GoString() []byte
-}
 type hclResource struct {
 	ResourceName string
 	LabelNames   []string
-	HclTag       string
-	HclSchemas   []*hclSchema
+	HclLabelTag  string
+	HclSchemas   []Hcl
+}
+
+func (hr *hclResource) HclTag() string {
+	return fmt.Sprintf("`hcl:\"%v,block\"`", hr.ResourceName)
+}
+
+type hclSchema struct {
+	TypeName  string
+	ValueType schema.ValueType
+	Optional  bool
+	Required  bool
+	Elem      Hcl
 }
 
 /*
@@ -78,18 +82,29 @@ type ${provider}Resources struct {
 }
 
 */
-func NewHclSchema(typeName string, sa *schema.Schema) HclSchema {
-	return &hclSchema{
+
+func NewHclSchema(typeName string, sa *schema.Schema) Hcl {
+	hs := &hclSchema{
 		TypeName:  typeName,
 		ValueType: sa.Type,
 		Optional:  sa.Optional,
 		Required:  sa.Required,
-		Elem:      sa.Elem,
 	}
+	switch sa.Elem.(type) {
+	case *schema.Resource:
+		hs.Elem = NewHclResource(typeName, sa.Elem.(*schema.Resource))
+	case *schema.Schema:
+		hs.Elem = NewHclSchema(typeName, sa.Elem.(*schema.Schema))
+	case nil:
+	default:
+		panic(fmt.Errorf("Unsupported Elem type %T", sa.Elem))
+	}
+
+	return hs
 }
 
-func NewHclResource(resName string, res *schema.Resource, label ...string) HclResource {
-	saList := make([]*hclSchema, len(res.Schema))
+func NewHclResource(resName string, res *schema.Resource, label ...string) Hcl {
+	saList := make([]Hcl, len(res.Schema))
 	i := 0
 	for k, v := range res.Schema {
 		hs := NewHclSchema(k, v)
@@ -101,25 +116,84 @@ func NewHclResource(resName string, res *schema.Resource, label ...string) HclRe
 	return &hclResource{
 		ResourceName: resName,
 		LabelNames:   label,
-		HclTag:       "`hcl:\",label\"`",
+		HclLabelTag:  "`hcl:\",label\"`",
 		HclSchemas:   saList,
 	}
 }
 
-func (hr *hclResource) GoString() []byte {
-	const strTmp = `type {{.ResourceName}} struct {
-{{$tag:=.HclTag}}
-{{range  .LabelNames}}
-{{.}} string {{$tag}}
+func (hs *hclSchema) GoString() string {
+	if hs.Optional || hs.Required {
+		return fmt.Sprintf("%v %v %v", Case2Camel(hs.TypeName), hs.GoType(), hs.HclTag())
+	}
+	return ""
+}
+
+func (hs *hclSchema) GoType() string {
+	switch hs.ValueType {
+	case schema.TypeBool:
+		if hs.Optional {
+			return "*bool"
+		}
+		return "bool"
+	case schema.TypeInt:
+		if hs.Optional {
+			return "*int"
+		}
+		return "int"
+	case schema.TypeFloat:
+		if hs.Optional {
+			return "*float"
+		}
+		return "float"
+	case schema.TypeString:
+		if hs.Optional {
+			return "*string"
+		}
+		return "string"
+	case schema.TypeList, schema.TypeSet:
+		return fmt.Sprintf("[]%v", hs.Elem.GoType())
+	case schema.TypeMap:
+		if hs.Elem == nil {
+			return fmt.Sprintf("map[string]string")
+		}
+		return fmt.Sprintf("map[string]%v", hs.Elem.GoType())
+	default:
+		return ""
+	}
+}
+
+func (hr *hclSchema) HclTag() string {
+	if ehr, ok := hr.Elem.(*hclResource); hr.Elem != nil && ok {
+		return ehr.HclTag()
+	}
+	return fmt.Sprintf("`hcl:\"%v\"`", hr.TypeName)
+
+}
+func (hr *hclResource) GoString() string {
+	const strTmp = `type {{ Case2Camel .ResourceName}} struct {
+{{$tag:=.HclLabelTag}}
+{{range  .LabelNames}}{{.}} string {{$tag}} 
+{{end}}
+{{range .HclSchemas}} {{.GoString }}
 {{end}}
 }`
+	return render(strTmp, hr)
+}
+
+func (hr *hclResource) GoType() string {
+	return Case2Camel(hr.ResourceName)
+}
+
+func render(strTmp string, params interface{}) string {
 	//利用模板库，生成代码文件
-	t, err := template.New("").Parse(strTmp)
+	t, err := template.New("").Funcs(template.FuncMap{
+		"Case2Camel": Case2Camel,
+	}).Parse(strTmp)
 	if err != nil {
 		log.Fatal(err)
 	}
 	buff := bytes.NewBufferString("")
-	err = t.Execute(buff, *hr)
+	err = t.Execute(buff, params)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -128,19 +202,57 @@ func (hr *hclResource) GoString() []byte {
 	if err != nil {
 		log.Fatal(err)
 	}
-	return src
+	return string(src)
 }
-func GetElemType(elem interface{}) string {
-	switch elem.(type) {
-	case *schema.Resource:
-		return "resource"
-	case *schema.Schema:
-		return "schema"
-	case nil:
-		return ""
-	default:
-		panic(fmt.Errorf("invalid elem type %v", elem))
+
+func CollectHclResources(hcl Hcl) []Hcl {
+	res := make([]Hcl, 0)
+	if hr, ok := hcl.(*hclResource); ok {
+		res = append(res, hr)
+		for _, hs := range hr.HclSchemas {
+			res = append(res, CollectHclResources(hs)...)
+		}
 	}
+	if hs, ok := hcl.(*hclSchema); ok {
+		res = append(res, CollectHclResources(hs.Elem)...)
+	}
+	return res
+}
+
+func RootGoString(resName string, hcls []Hcl) string {
+	hclResource := &hclResource{
+		ResourceName: resName,
+		HclSchemas:   hcls,
+	}
+	const strTmp = `type {{ Case2Camel .ResourceName}} struct {
+{{$tag:=.HclLabelTag}}
+{{range  .LabelNames}}{{.}} string {{$tag}} 
+{{end}}
+{{range .HclSchemas}} {{.GoType }} {{.HclTag}}
+{{end}}
+}`
+	return render(strTmp, hclResource)
+}
+func HclRW() {
+	tcProvider := tencentcloud.Provider()
+	tcResList := make([]Hcl, 0)
+	if provider, ok := (tcProvider).(*schema.Provider); ok {
+		for k, res := range provider.ResourcesMap {
+			hclres := NewHclResource(k, res, "Type", "Name")
+			tcResList = append(tcResList, hclres)
+			resList := CollectHclResources(hclres)
+			logger.Info("====================", "res", k)
+			for _, h := range resList {
+				logger.Info(
+					"code generate", "context", h.GoString(),
+				)
+			}
+
+		}
+		logger.Info("====================", "res", "ROOT")
+		logger.Info("code generate", "context", RootGoString("tencent_cloud_stack", tcResList))
+	}
+
 }
 
 func TfReader() {
@@ -149,10 +261,8 @@ func TfReader() {
 	if provider, ok := (tcProvider).(*schema.Provider); ok {
 		resName := "tencentcloud_instance"
 		ResourceTcInstance := provider.ResourcesMap[resName]
+
 		coreSchema := schema.InternalMap(ResourceTcInstance.Schema).CoreConfigSchema()
-		logger.Info(
-			"code generate", "context", string(NewHclResource(resName, ResourceTcInstance, "Type", "Name").GoString()),
-		)
 
 		for k, v := range coreSchema.Attributes {
 			if true || v.Optional || v.Required {
