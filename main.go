@@ -1,10 +1,11 @@
 package main
 
 import (
-	GoHclGen "Terrapin/gohcl-gen"
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclsimple"
@@ -13,7 +14,6 @@ import (
 	"github.com/hashicorp/terraform-exec/tfinstall"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 	"github.com/tencentcloudstack/terraform-provider-tencentcloud/tencentcloud"
-	"log"
 )
 
 var logger = hclog.L()
@@ -128,8 +128,8 @@ func ExampleHclEncodeAndDecode() {
 		//},
 		Resources: []ResourceTcInstance{
 			{
-				Name:    "web",
-				Type:    "http",
+				Type:    "tencentcloud_instance",
+				Name:    "http-11",
 				ImageId: "img-123",
 				DataDisks: []DataDisks{
 					{DataDiskSize: 10, DataDiskType: "CLOUD_PREMIUM"},
@@ -137,8 +137,8 @@ func ExampleHclEncodeAndDecode() {
 				},
 			},
 			{
-				Name:    "work",
-				Type:    "grpc",
+				Type:    "tencentcloud_instance",
+				Name:    "grpc-22",
 				ImageId: "img-222",
 			},
 		},
@@ -173,6 +173,6 @@ func ExampleHclEncodeAndDecode() {
 
 func main() {
 	//TerraformExec()
-	//ExampleHclEncodeAndDecode()
-	GoHclGen.HclRW()
+	ExampleHclEncodeAndDecode()
+	hcl_go_gen.HclRW()
 }

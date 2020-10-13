@@ -1,4 +1,4 @@
-package GoHclGen
+package hcl_go_gen
 
 import (
 	"bytes"

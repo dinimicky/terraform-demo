@@ -1,41 +1,19 @@
-package GoHclGen
+package hcl_go_gen
 
 import (
 	"bytes"
 	"fmt"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/terraform"
 	"github.com/tencentcloudstack/terraform-provider-tencentcloud/tencentcloud"
-	"go/build"
 	"go/format"
 	"log"
-	"os"
 	"text/template"
 )
 
-type Status int
-
-//go:generate go run "github.com/dinimicky/myenumstr" -type Status,Color
-const (
-	Offline Status = iota
-	Online
-	Disable
-	Added
-	Deleted
-)
-
-type Color int
-
-const (
-	Write Color = iota
-	Red
-	Blue
-)
-
 var (
-	pkgInfo *build.Package
-	err     error
-	logger  = hclog.L()
+	logger = hclog.L()
 )
 
 type Hcl interface {
@@ -49,10 +27,6 @@ type hclResource struct {
 	LabelNames   []string
 	HclLabelTag  string
 	HclSchemas   []Hcl
-}
-
-func (hr *hclResource) HclTag() string {
-	return fmt.Sprintf("`hcl:\"%v,block\"`", hr.ResourceName)
 }
 
 type hclSchema struct {
@@ -205,6 +179,10 @@ func render(strTmp string, params interface{}) string {
 	return string(src)
 }
 
+func (hr *hclResource) HclTag() string {
+	return fmt.Sprintf("`hcl:\"%v,block\"`", hr.ResourceName)
+}
+
 func CollectHclResources(hcl Hcl) []Hcl {
 	res := make([]Hcl, 0)
 	if hr, ok := hcl.(*hclResource); ok {
@@ -219,22 +197,41 @@ func CollectHclResources(hcl Hcl) []Hcl {
 	return res
 }
 
-func RootGoString(resName string, hcls []Hcl) string {
+func RootGoString(resName string, hcls []Hcl) Hcl {
+	hss := make([]Hcl, len(hcls))
+	for i, hcl := range hcls {
+		hs := &hclSchema{
+			TypeName:  hcl.GoType(),
+			ValueType: schema.TypeList,
+			Optional:  true,
+			Elem:      hcl,
+		}
+		hss[i] = hs
+	}
+
 	hclResource := &hclResource{
 		ResourceName: resName,
-		HclSchemas:   hcls,
+		HclSchemas:   hss,
 	}
-	const strTmp = `type {{ Case2Camel .ResourceName}} struct {
-{{$tag:=.HclLabelTag}}
-{{range  .LabelNames}}{{.}} string {{$tag}} 
-{{end}}
-{{range .HclSchemas}} {{.GoType }} {{.HclTag}}
-{{end}}
-}`
-	return render(strTmp, hclResource)
+
+	return hclResource
 }
+
 func HclRW() {
 	tcProvider := tencentcloud.Provider()
+	req := &terraform.ProviderSchemaRequest{
+		ResourceTypes: []string{"tencentcloud_instance"},
+	}
+	cfg, err := tcProvider.GetSchema(req)
+	if err != nil {
+		panic(err)
+	}
+	logger.Info("resources config ", "res_cfg", cfg)
+
+	for _, v := range tcProvider.Resources() {
+		logger.Info("resources ", "res", v)
+	}
+
 	tcResList := make([]Hcl, 0)
 	if provider, ok := (tcProvider).(*schema.Provider); ok {
 		for k, res := range provider.ResourcesMap {
@@ -252,55 +249,5 @@ func HclRW() {
 		logger.Info("====================", "res", "ROOT")
 		logger.Info("code generate", "context", RootGoString("tencent_cloud_stack", tcResList))
 	}
-
-}
-
-func TfReader() {
-	tcProvider := tencentcloud.Provider()
-
-	if provider, ok := (tcProvider).(*schema.Provider); ok {
-		resName := "tencentcloud_instance"
-		ResourceTcInstance := provider.ResourcesMap[resName]
-
-		coreSchema := schema.InternalMap(ResourceTcInstance.Schema).CoreConfigSchema()
-
-		for k, v := range coreSchema.Attributes {
-			if true || v.Optional || v.Required {
-				logger.Info(
-					"tencentcloud_instance attr", "key", k, "type", v.Type.GoString(), "Optional",
-					v.Optional,
-					"Required", v.Required,
-				)
-			}
-
-		}
-
-		for k, v := range coreSchema.BlockTypes {
-
-			logger.Info("tencentcloud_instance block", "key", k, "type", v.BlockTypes, "value", v.Block)
-
-		}
-	} else {
-		panic(fmt.Errorf("wrong provider"))
-	}
-
-}
-
-func ReadPackage() {
-	pkgInfo, err = build.ImportDir(".", 0)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("%v", pkgInfo)
-	pkgInfo, err = build.ImportDir(
-		"/Users/ezonghu/go/pkg/mod/github.com/tencentcloudstack/terraform-provider-tencentcloud@v1.44.0/gendoc", 0,
-	)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("%v", pkgInfo)
-
-	GOMODCACHE := os.Getenv("GOMODCACHE")
-	fmt.Println("%v", GOMODCACHE)
 
 }
