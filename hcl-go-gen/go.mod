@@ -1,4 +1,4 @@
-module hcl-go-gen
+module github.com/dinimicky/terraform-demo/hcl-go-gen
 
 go 1.15
 

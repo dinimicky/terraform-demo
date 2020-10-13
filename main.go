@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 
+	hcl_go_gen "github.com/dinimicky/terraform-demo/hcl-go-gen"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclsimple"
