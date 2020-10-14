@@ -3,13 +3,14 @@ package hcl_go_gen
 import (
 	"bytes"
 	"fmt"
+	"go/format"
+	"log"
+	"text/template"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/terraform"
 	"github.com/tencentcloudstack/terraform-provider-tencentcloud/tencentcloud"
-	"go/format"
-	"log"
-	"text/template"
 )
 
 var (
@@ -247,7 +248,7 @@ func HclRW() {
 
 		}
 		logger.Info("====================", "res", "ROOT")
-		logger.Info("code generate", "context", RootGoString("tencent_cloud_stack", tcResList))
+		logger.Info("code generate", "context", RootGoString("tencent_cloud_stack", tcResList).GoString())
 	}
 
 }

@@ -174,7 +174,7 @@ func ExampleHclEncodeAndDecode() {
 }
 
 func main() {
-	//TerraformExec()
+	TerraformExec()
 	ExampleHclEncodeAndDecode()
 	hcl_go_gen.HclRW()
 }
